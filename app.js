@@ -78,10 +78,11 @@ passport.use(new LocalStrategy(User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
+// ✅ FIXED: Middleware to make currUser and flash messages available to all views
 app.use((req,res,next)=>{
     res.locals.success=req.flash("success");
-  res.locals.error=req.flash("error");
-  res.locals.currUser=req.user;
+    res.locals.error=req.flash("error");
+    res.locals.currUser=req.user || null;  // Set to null if user not logged in (instead of undefined)
     next();
 });
 
