@@ -1,286 +1,200 @@
-// Map Integration Script for Property Listings
-// Supports both Mapbox GL JS and Google Maps
-// Expects `mapToken` and `listing` variables to be defined globally from EJS
+// Leaflet Map Integration for Hotel Locations
+// Displays exact hotel location from database coordinates
 
 (function() {
   'use strict';
 
-  // Configuration
-  const MAP_PROVIDER = 'mapbox'; // Change to 'google' for Google Maps
-  const DEFAULT_ZOOM = 12;
-  
-  // Marker color palette for different listings
-  const MARKER_COLORS = [
-    '#ef4444', // red
-    '#3b82f6', // blue
-    '#10b981', // green
-    '#f59e0b', // amber
-    '#8b5cf6', // violet
-    '#ec4899', // pink
-    '#14b8a6', // teal
-    '#f97316'  // orange
-  ];
-
-  // Get a consistent color for a listing based on its ID or title
-  function getMarkerColor(listing) {
-    if (!listing || !listing.title) return MARKER_COLORS[0];
-    
-    // Generate a hash from the listing title to get consistent colors
-    let hash = 0;
-    for (let i = 0; i < listing.title.length; i++) {
-      hash = listing.title.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % MARKER_COLORS.length;
-    return MARKER_COLORS[index];
-  }
-
-  // Initialize map based on provider
+  // Initialize map when DOM is ready
   function initializeMap() {
-    if (typeof mapToken === 'undefined') {
-      console.error('Map token is not defined');
-      showError('Map API key is missing');
-      return;
-    }
-
-    if (typeof listing === 'undefined' || !listing.geometry) {
-      console.error('Listing data is not defined or missing geometry');
-      showError('Property location data is missing');
-      return;
-    }
-
-    // Extract coordinates from GeoJSON format
-    const coordinates = listing.geometry.coordinates;
-    const longitude = coordinates[0];
-    const latitude = coordinates[1];
-
-    if (MAP_PROVIDER === 'mapbox') {
-      initializeMapbox(longitude, latitude);
-    } else if (MAP_PROVIDER === 'google') {
-      initializeGoogleMaps(longitude, latitude);
-    }
-  }
-
-  // Initialize Mapbox GL JS map
-  function initializeMapbox(lng, lat) {
-    // Check if Mapbox GL JS is loaded
-    if (typeof mapboxgl === 'undefined') {
-      console.error('Mapbox GL JS library not loaded');
+    // Check if Leaflet is loaded
+    if (typeof L === 'undefined') {
+      console.error('Leaflet library not loaded');
       showError('Map library failed to load');
       return;
     }
 
-    mapboxgl.accessToken = mapToken;
+    // Check if hotelLocation and hotelData are defined from EJS
+    if (typeof hotelLocation === 'undefined' || !hotelLocation.coordinates) {
+      console.error('Hotel location data not found');
+      showError('Hotel location data is missing');
+      return;
+    }
 
     try {
-      // Create map instance
-      const map = new mapboxgl.Map({
-        container: 'map',
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [lng, lat],
-        zoom: DEFAULT_ZOOM,
-        attributionControl: true
-      });
+      // Extract coordinates [longitude, latitude]
+      const [longitude, latitude] = hotelLocation.coordinates;
+      
+      // Validate coordinates
+      if (!isValidCoordinates(latitude, longitude)) {
+        console.error('Invalid coordinates:', latitude, longitude);
+        showError('Invalid hotel location coordinates');
+        return;
+      }
 
-      // Add navigation controls
-      map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      // Create Leaflet map centered on hotel location
+      const map = L.map('map').setView([latitude, longitude], 15);
 
-      // Add fullscreen control
-      map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        zoom: 15
+      }).addTo(map);
 
-      const markerColor = getMarkerColor(listing);
+      // Create custom marker with hotel icon
+      const hotelMarker = L.marker([latitude, longitude], {
+        icon: createHotelMarker(),
+        title: hotelData.title
+      }).addTo(map);
 
-      // Create custom marker element
-      const markerElement = createCustomMarker(markerColor);
-
-      // Create popup content
+      // Create popup content with hotel information
       const popupContent = `
-        <div class="map-popup">
-          <h3 class="popup-title">${escapeHtml(listing.title)}</h3>
-          <p class="popup-location">${escapeHtml(listing.location)}</p>
-          ${listing.price ? `<p class="popup-price">$${listing.price}/night</p>` : ''}
+        <div style="font-family: Arial, sans-serif; width: 250px;">
+          <h5 style="margin: 0 0 10px 0; color: #2c3e50;">
+            📍 ${escapeHtml(hotelData.title)}
+          </h5>
+          <p style="margin: 5px 0; color: #555;">
+            <strong>Location:</strong> ${escapeHtml(hotelData.location)}
+          </p>
+          <p style="margin: 5px 0; color: #555;">
+            <strong>Country:</strong> ${escapeHtml(hotelData.description.substring(0, 50))}...
+          </p>
+          <p style="margin: 5px 0; color: #27ae60; font-weight: bold;">
+            💰 ₹${hotelData.price.toLocaleString('en-IN')}/night
+          </p>
+          <p style="margin: 10px 0 0 0; font-size: 12px; color: #7f8c8d;">
+            Latitude: ${latitude.toFixed(4)}<br>
+            Longitude: ${longitude.toFixed(4)}
+          </p>
         </div>
       `;
 
-      // Create popup
-      const popup = new mapboxgl.Popup({ 
-        offset: 25,
-        closeButton: true,
-        closeOnClick: false
-      }).setHTML(popupContent);
+      // Bind popup to marker
+      hotelMarker.bindPopup(popupContent, {
+        maxWidth: 300,
+        className: 'custom-popup'
+      }).openPopup();
 
-      // Add marker to map
-      const marker = new mapboxgl.Marker({
-        element: markerElement,
-        anchor: 'bottom'
-      })
-        .setLngLat([lng, lat])
-        .setPopup(popup)
-        .addTo(map);
-
-      // Show popup on load
-      marker.togglePopup();
-
-      // Add circle to show approximate area (useful for privacy)
-      map.on('load', function() {
-        map.addSource('property-radius', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [lng, lat]
-            }
-          }
-        });
-
-        map.addLayer({
-          id: 'property-radius-layer',
-          type: 'circle',
-          source: 'property-radius',
-          paint: {
-            'circle-radius': 100,
-            'circle-color': markerColor,
-            'circle-opacity': 0.1,
-            'circle-stroke-width': 2,
-            'circle-stroke-color': markerColor,
-            'circle-stroke-opacity': 0.3
-          }
-        });
+      // Add click event to marker
+      hotelMarker.on('click', function() {
+        map.setView([latitude, longitude], 16);
       });
 
-      console.log('Mapbox map initialized successfully');
-    } catch (error) {
-      console.error('Error initializing Mapbox:', error);
-      showError('Failed to load map');
-    }
-  }
-
-  // Initialize Google Maps
-  function initializeGoogleMaps(lng, lat) {
-    // Check if Google Maps is loaded
-    if (typeof google === 'undefined' || !google.maps) {
-      console.error('Google Maps library not loaded');
-      showError('Map library failed to load');
-      return;
-    }
-
-    try {
-      const mapOptions = {
-        center: { lat: lat, lng: lng },
-        zoom: DEFAULT_ZOOM,
-        mapTypeControl: true,
-        mapTypeControlOptions: {
-          style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
-          mapTypeIds: ['roadmap', 'satellite']
-        },
-        streetViewControl: true,
-        fullscreenControl: true,
-        zoomControl: true
-      };
-
-      const map = new google.maps.Map(document.getElementById('map'), mapOptions);
-      const markerColor = getMarkerColor(listing);
-
-      // Create custom marker icon
-      const markerIcon = {
-        path: google.maps.SymbolPath.CIRCLE,
-        fillColor: markerColor,
-        fillOpacity: 1,
-        strokeColor: '#ffffff',
-        strokeWeight: 3,
-        scale: 12
-      };
-
-      // Create marker
-      const marker = new google.maps.Marker({
-        position: { lat: lat, lng: lng },
-        map: map,
-        icon: markerIcon,
-        title: listing.title,
-        animation: google.maps.Animation.DROP
-      });
-
-      // Create info window
-      const infoWindowContent = `
-        <div class="map-popup">
-          <h3 class="popup-title">${escapeHtml(listing.title)}</h3>
-          <p class="popup-location">${escapeHtml(listing.location)}</p>
-          ${listing.price ? `<p class="popup-price">$${listing.price}/night</p>` : ''}
-        </div>
-      `;
-
-      const infoWindow = new google.maps.InfoWindow({
-        content: infoWindowContent
-      });
-
-      // Show info window on marker click
-      marker.addListener('click', function() {
-        infoWindow.open(map, marker);
-      });
-
-      // Open info window by default
-      infoWindow.open(map, marker);
-
-      // Add circle to show approximate area
-      const circle = new google.maps.Circle({
-        map: map,
-        center: { lat: lat, lng: lng },
-        radius: 500, // 500 meters
-        fillColor: markerColor,
+      // Add circle to show approximate area (3km radius)
+      L.circle([latitude, longitude], {
+        color: '#3498db',
+        fillColor: '#3498db',
         fillOpacity: 0.1,
-        strokeColor: markerColor,
-        strokeOpacity: 0.3,
-        strokeWeight: 2
-      });
+        radius: 3000, // 3km
+        weight: 2
+      }).addTo(map);
 
-      console.log('Google Maps initialized successfully');
+      // Add zoom controls
+      L.control.zoom({
+        position: 'topright'
+      }).addTo(map);
+
+      // Add fullscreen control button
+      addFullscreenControl(map);
+
+      // Add scale control
+      L.control.scale().addTo(map);
+
+      console.log('Leaflet map initialized successfully for:', hotelData.title);
+      console.log('Coordinates:', latitude, longitude);
+
     } catch (error) {
-      console.error('Error initializing Google Maps:', error);
-      showError('Failed to load map');
+      console.error('Error initializing map:', error);
+      showError('Failed to load map: ' + error.message);
     }
   }
 
-  // Create custom marker element for Mapbox
-  function createCustomMarker(color) {
-    const el = document.createElement('div');
-    el.className = 'custom-marker';
-    el.style.cssText = `
-      width: 40px;
-      height: 40px;
-      cursor: pointer;
-    `;
-    
-    el.innerHTML = `
-      <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.4"/>
-          </filter>
-        </defs>
-        <path
-          d="M20 5 C 12 5, 7 10, 7 17 C 7 25, 20 35, 20 35 C 20 35, 33 25, 33 17 C 33 10, 28 5, 20 5 Z"
-          fill="${color}"
-          stroke="white"
-          stroke-width="2.5"
-          filter="url(#shadow)"
-        />
-        <circle cx="20" cy="17" r="5" fill="white" opacity="0.9"/>
-      </svg>
-    `;
+  // Validate coordinates
+  function isValidCoordinates(lat, lng) {
+    return (
+      !isNaN(lat) && 
+      !isNaN(lng) && 
+      lat >= -90 && 
+      lat <= 90 && 
+      lng >= -180 && 
+      lng <= 180
+    );
+  }
 
-    return el;
+  // Create custom hotel marker icon
+  function createHotelMarker() {
+    return L.icon({
+      iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48ZGVmcz48ZmlsdGVyIGlkPSJzaGFkb3ciIHg9Ii01MCUiIHk9Ii01MCUiIHdpZHRoPSIyMDAlIiBoZWlnaHQ9IjIwMCUiPjxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSIyIiBzdGREZXZpYXRpb249IjMiIGZsb29kLW9wYWNpdHk9IjAuNCIvPjwvZmlsdGVyPjwvZGVmcz48cGF0aCBkPSJNMjAgNUMxMiA1IDcgMTAgNyAxNyBDIDcgMjUgMjAgMzUgMjAgMzUgQyAyMCAzNSAzMyAyNSAzMyAxNyBDIDMzIDEwIDI4IDUgMjAgNSBaIiBmaWxsPSIjZTc0YzNjIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIuNSIgZmlsdGVyPSJ1cmwoI3NoYWRvdykiLz48Y2lyY2xlIGN4PSIyMCIgY3k9IjE3IiByPSI1IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC45Ii8+PHRleHQgeD0iMjAiIHk9IjIwIiBmb250LXNpemU9IjE2IiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzJjM2U1MCIgZm9udC1mYW1pbHk9IkFyaWFsIj7wnZGdPC90ZXh0Pjwvc3ZnPg==',
+      iconSize: [40, 40],
+      iconAnchor: [20, 40],
+      popupAnchor: [0, -40],
+      shadowUrl: null
+    });
+  }
+
+  // Add fullscreen control
+  function addFullscreenControl(map) {
+    const fullscreenBtn = L.control({ position: 'topright' });
+    
+    fullscreenBtn.onAdd = function() {
+      const div = L.DomUtil.create('div', 'leaflet-control-fullscreen');
+      div.innerHTML = `
+        <button id="fullscreen-btn" title="Fullscreen" style="
+          width: 36px;
+          height: 36px;
+          background: white;
+          border: 2px solid #ccc;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 18px;
+          line-height: 36px;
+          text-align: center;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">⛶</button>
+      `;
+      
+      L.DomEvent.disableClickPropagation(div);
+      div.addEventListener('click', function() {
+        toggleFullscreen(map);
+      });
+      
+      return div;
+    };
+    
+    fullscreenBtn.addTo(map);
+  }
+
+  // Toggle fullscreen
+  function toggleFullscreen(map) {
+    const mapContainer = document.getElementById('map');
+    if (!document.fullscreenElement) {
+      mapContainer.requestFullscreen().catch(err => {
+        alert(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+    
+    // Invalidate size after a small delay
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
   }
 
   // Escape HTML to prevent XSS
   function escapeHtml(text) {
     const map = {
-      '&': '&',
-      '<': '<',
-      '>': '>',
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
       '"': '&quot;',
       "'": '&#039;'
     };
-    return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    return String(text).replace(/[&<>"']/g, m => map[m]);
   }
 
   // Show error message in map container
@@ -288,19 +202,27 @@
     const mapContainer = document.getElementById('map');
     if (mapContainer) {
       mapContainer.innerHTML = `
-        <div class="map-error">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
-          <p>${message}</p>
+        <div style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          background: #f5f5f5;
+          border: 2px solid #e74c3c;
+          border-radius: 8px;
+          padding: 20px;
+          text-align: center;
+        ">
+          <div>
+            <p style="color: #e74c3c; font-weight: bold; margin-bottom: 10px;">⚠️ Map Error</p>
+            <p style="color: #555; margin: 0;">${escapeHtml(message)}</p>
+          </div>
         </div>
       `;
     }
   }
 
-  // Initialize map when DOM is ready
+  // Initialize on DOM ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeMap);
   } else {
