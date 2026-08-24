@@ -1,6 +1,12 @@
 <% layout("/layouts/boilerplate") %>
 <script>
-  const mapToken = "<%= mapToken %>";
+  const hotelLocation = <%- JSON.stringify(listing.geometry) %>;
+  const hotelData = {
+    title: "<%- listing.title %>",
+    location: "<%- listing.location %>",
+    price: <%= listing.price %>,
+    description: "<%- listing.description %>"
+  };
 </script>
 <div class="row">
     <div class="col-8 offset-3 mt-3">
@@ -73,26 +79,11 @@
             </div>
         <%}%>
     </div>
-   <div id="map" style="height: 400px; width: 100%;">
-    <gmp-map
-  center="43.4142989,-124.2301242"
-  zoom="4"
-  map-id="e1f56a4ddbb5d3e73b1d9dda"
-  style="height: 400px"
->
-  <gmp-advanced-marker
-    position="37.4220656,-122.0840897"
-    title="Mountain View, CA"
-  ></gmp-advanced-marker>
-  <gmp-advanced-marker
-    position="47.648994,-122.3503845"
-    title="Seattle, WA"
-  ></gmp-advanced-marker>
-</gmp-map>
-   </div>
-
-
-
-<script src="/js/map.js"></script>
+    <!-- Hotel Location Map Section -->
+    <div class="col-8 offset-3 mt-5 mb-5">
+        <h4>📍 Hotel Location</h4>
+        <div id="map" style="height: 500px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+    </div>
 </div>
 
+<script src="/js/map.js"></script>
