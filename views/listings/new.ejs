@@ -51,7 +51,38 @@
             <label for ="location" class="form-label">Location</label>       
         <input name="listing[location]" placeholder="enter Location" class="form-control" required>
         <div class="invalid-feedback">location name should be valid</div>
-        </div>        
+        </div>
+
+        <!-- NEW: Latitude and Longitude Fields for Leaflet Map -->
+        <div class="row">
+            <div class="mb-3 col-md-6">
+                <label for="latitude" class="form-label">Latitude 📍</label>
+                <input name="listing[latitude]" 
+                type="number" 
+                step="0.000001"
+                placeholder="e.g., 28.6139" 
+                class="form-control" 
+                required/>
+                <small class="form-text text-muted">Range: -90 to 90</small>
+                <div class="invalid-feedback">Please enter a valid latitude</div>
+            </div>
+            <div class="mb-3 col-md-6">
+                <label for="longitude" class="form-label">Longitude 📍</label>
+                <input name="listing[longitude]" 
+                type="number" 
+                step="0.000001"
+                placeholder="e.g., 77.2090" 
+                class="form-control" 
+                required/>
+                <small class="form-text text-muted">Range: -180 to 180</small>
+                <div class="invalid-feedback">Please enter a valid longitude</div>
+            </div>
+        </div>
+        
+        <div class="alert alert-info" role="alert">
+            <strong>💡 Tip:</strong> Find coordinates on <a href="https://maps.google.com" target="_blank">Google Maps</a> or <a href="https://www.latlong.net/" target="_blank">LatLong.net</a>
+            <br>Right-click on the location → Copy coordinates
+        </div>
 
         <button class="btn btn-dark add-btn mt-3 mb-3">ADD</button>
         
