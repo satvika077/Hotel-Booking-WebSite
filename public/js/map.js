@@ -14,9 +14,9 @@
     }
 
     // Check if hotelLocation and hotelData are defined from EJS
-    if (typeof hotelLocation === 'undefined' || !hotelLocation.coordinates) {
+    if (typeof hotelLocation === 'undefined' || !hotelLocation || !hotelLocation.coordinates || hotelLocation.coordinates.length < 2) {
       console.error('Hotel location data not found');
-      showError('Hotel location data is missing');
+      showError('📍 This hotel location is not yet mapped. Please check back soon!');
       return;
     }
 
@@ -187,14 +187,14 @@
 
   // Escape HTML to prevent XSS
   function escapeHtml(text) {
-    const map = {
+    const htmlMap = {
       '&': '&amp;',
       '<': '&lt;',
       '>': '&gt;',
       '"': '&quot;',
       "'": '&#039;'
     };
-    return String(text).replace(/[&<>"']/g, m => map[m]);
+    return String(text).replace(/[&<>"']/g, m => htmlMap[m]);
   }
 
   // Show error message in map container
